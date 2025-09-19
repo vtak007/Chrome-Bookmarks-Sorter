@@ -1,0 +1,5 @@
+PLACEHOLDER FOR icon16.png
+- Size: 16x16 pixels
+- Format: PNG
+- Use: Extension toolbar icon
+- Suggestion: Simple bookmark or folder icon in blue/purple theme

@@ -1,0 +1,5 @@
+PLACEHOLDER FOR icon48.png
+- Size: 48x48 pixels
+- Format: PNG
+- Use: Extension management page
+- Suggestion: Detailed bookmark/sorting icon with folder elements

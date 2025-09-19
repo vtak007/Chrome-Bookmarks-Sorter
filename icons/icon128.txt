@@ -1,0 +1,5 @@
+PLACEHOLDER FOR icon128.png
+- Size: 128x128 pixels
+- Format: PNG
+- Use: Chrome Web Store listing
+- Suggestion: High-quality icon showing bookmark organization/sorting concept

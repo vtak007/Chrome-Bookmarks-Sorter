@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chrome Bookmarks Sorter</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 Bookmarks Sorter</h1>
+            <p>Organize your bookmarks efficiently</p>
+        </header>
+        
+        <main>
+            <!-- Folder Selection -->
+            <section class="folder-section">
+                <h3>Select Folder to Sort</h3>
+                <select id="folderSelect" class="folder-select">
+                    <option value="">Loading folders...</option>
+                </select>
+            </section>
+
+            <!-- Sorting Options -->
+            <section class="sort-section">
+                <h3>Sort Options</h3>
+                <div class="sort-controls">
+                    <select id="sortCriteria">
+                        <option value="title">By Name (A-Z)</option>
+                        <option value="url">By URL (A-Z)</option>
+                        <option value="dateAdded">By Date Added (Newest)</option>
+                        <option value="dateAdded-desc">By Date Added (Oldest)</option>
+                    </select>
+                </div>
+                
+                <button id="sortBtn" class="btn-primary">Sort Selected Folder</button>
+            </section>
+
+            <!-- Quick Actions -->
+            <section class="actions-section">
+                <h3>Quick Actions</h3>
+                <div class="action-buttons">
+                    <button id="removeDuplicatesBtn" class="btn-secondary">Remove Duplicates</button>
+                    <button id="organizeByDomainBtn" class="btn-secondary">Group by Domain</button>
+                    <button id="cleanupBtn" class="btn-secondary">Remove Empty Folders</button>
+                </div>
+            </section>
+
+            <!-- Backup/Restore -->
+            <section class="backup-section">
+                <h3>Backup & Restore</h3>
+                <div class="backup-controls">
+                    <button id="backupBtn" class="btn-secondary">Create Backup</button>
+                    <input type="file" id="restoreInput" accept=".json" style="display: none;">
+                    <button id="restoreBtn" class="btn-secondary">Restore Backup</button>
+                </div>
+            </section>
+
+            <!-- Statistics -->
+            <section class="stats-section">
+                <h3>Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Bookmarks:</span>
+                        <span id="totalBookmarks" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Folders:</span>
+                        <span id="totalFolders" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Duplicates:</span>
+                        <span id="duplicateCount" class="stat-value">-</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Status Messages -->
+        <div id="statusMessage" class="status-message hidden"></div>
+        
+        <!-- Progress Bar -->
+        <div id="progressContainer" class="progress-container hidden">
+            <div class="progress-bar">
+                <div id="progressBar" class="progress-fill"></div>
+            </div>
+            <span id="progressText">Processing...</span>
+        </div>
+    </div>
+
+    <script src="utils.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

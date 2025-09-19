@@ -1,0 +1,403 @@
+/**
+ * Utility functions for Chrome Bookmarks Sorter
+ */
+
+class BookmarkUtils {
+    /**
+     * Sort bookmarks based on criteria and direction
+     * @param {Array} bookmarks - Array of bookmark objects
+     * @param {string} criteria - Sort criteria ('title', 'url', 'dateAdded')
+     * @param {boolean} descending - Sort in descending order
+     * @returns {Array} Sorted bookmarks array
+     */
+    static sortBookmarks(bookmarks, criteria, descending = false) {
+        const sorted = [...bookmarks].sort((a, b) => {
+            let valueA, valueB;
+
+            switch (criteria) {
+                case 'title':
+                    valueA = (a.title || '').toLowerCase();
+                    valueB = (b.title || '').toLowerCase();
+                    break;
+                case 'url':
+                    valueA = (a.url || '').toLowerCase();
+                    valueB = (b.url || '').toLowerCase();
+                    break;
+                case 'dateAdded':
+                    valueA = a.dateAdded || 0;
+                    valueB = b.dateAdded || 0;
+                    break;
+                default:
+                    valueA = (a.title || '').toLowerCase();
+                    valueB = (b.title || '').toLowerCase();
+            }
+
+            // Handle numeric comparison for dates
+            if (criteria === 'dateAdded') {
+                return descending ? valueB - valueA : valueA - valueB;
+            }
+
+            // Handle string comparison
+            if (valueA < valueB) return descending ? 1 : -1;
+            if (valueA > valueB) return descending ? -1 : 1;
+            return 0;
+        });
+
+        return sorted;
+    }
+
+    /**
+     * Find duplicate bookmarks based on URL
+     * @param {Array} bookmarks - Array of bookmark objects
+     * @returns {Array} Array of duplicate bookmark groups
+     */
+    static findDuplicates(bookmarks) {
+        const urlMap = new Map();
+        const duplicates = [];
+
+        // Group bookmarks by URL
+        bookmarks.forEach(bookmark => {
+            if (bookmark.url) {
+                const url = bookmark.url.toLowerCase();
+                if (!urlMap.has(url)) {
+                    urlMap.set(url, []);
+                }
+                urlMap.get(url).push(bookmark);
+            }
+        });
+
+        // Find groups with more than one bookmark
+        for (const [url, group] of urlMap) {
+            if (group.length > 1) {
+                duplicates.push({
+                    url,
+                    bookmarks: group,
+                    count: group.length
+                });
+            }
+        }
+
+        return duplicates;
+    }
+
+    /**
+     * Group bookmarks by domain
+     * @param {Array} bookmarks - Array of bookmark objects
+     * @returns {Object} Object with domain as key and bookmarks array as value
+     */
+    static groupByDomain(bookmarks) {
+        const domainGroups = {};
+
+        bookmarks.forEach(bookmark => {
+            if (bookmark.url) {
+                try {
+                    const domain = new URL(bookmark.url).hostname;
+                    const cleanDomain = domain.replace(/^www\./, '');
+                    
+                    if (!domainGroups[cleanDomain]) {
+                        domainGroups[cleanDomain] = [];
+                    }
+                    domainGroups[cleanDomain].push(bookmark);
+                } catch (error) {
+                    // Handle invalid URLs
+                    if (!domainGroups['invalid-url']) {
+                        domainGroups['invalid-url'] = [];
+                    }
+                    domainGroups['invalid-url'].push(bookmark);
+                }
+            }
+        });
+
+        return domainGroups;
+    }
+
+    /**
+     * Get all bookmarks from a specific folder
+     * @param {Object} folder - Chrome bookmark folder object
+     * @returns {Array} Flattened array of all bookmarks in the folder
+     */
+    static getAllBookmarksFromFolder(folder) {
+        const bookmarks = [];
+
+        if (folder.children) {
+            folder.children.forEach(child => {
+                if (child.url) {
+                    // It's a bookmark
+                    bookmarks.push(child);
+                } else if (child.children) {
+                    // It's a folder, recursively get its bookmarks
+                    bookmarks.push(...this.getAllBookmarksFromFolder(child));
+                }
+            });
+        }
+
+        return bookmarks;
+    }
+
+    /**
+     * Get statistics about bookmarks
+     * @param {Array} bookmarkTree - Chrome bookmark tree
+     * @returns {Object} Statistics object
+     */
+    static getBookmarkStats(bookmarkTree) {
+        let totalBookmarks = 0;
+        let totalFolders = 0;
+
+        const countItems = (node) => {
+            if (node.url) {
+                totalBookmarks++;
+            } else if (node.children) {
+                totalFolders++;
+                node.children.forEach(child => countItems(child));
+            }
+        };
+
+        bookmarkTree.forEach(root => countItems(root));
+
+        return {
+            totalBookmarks,
+            totalFolders
+        };
+    }
+
+    /**
+     * Find empty folders in bookmark tree
+     * @param {Array} bookmarkTree - Chrome bookmark tree
+     * @returns {Array} Array of empty folder IDs
+     */
+    static findEmptyFolders(bookmarkTree) {
+        const emptyFolders = [];
+
+        const checkFolder = (node) => {
+            if (node.children && node.children.length === 0) {
+                // Folder is empty
+                emptyFolders.push(node.id);
+            } else if (node.children) {
+                // Check subfolders
+                let hasBookmarks = false;
+                node.children.forEach(child => {
+                    if (child.url) {
+                        hasBookmarks = true;
+                    } else if (child.children) {
+                        checkFolder(child);
+                        // Check if subfolder has any bookmarks
+                        if (this.getAllBookmarksFromFolder(child).length > 0) {
+                            hasBookmarks = true;
+                        }
+                    }
+                });
+
+                // If folder has no bookmarks (only empty subfolders), mark as empty
+                if (!hasBookmarks) {
+                    emptyFolders.push(node.id);
+                }
+            }
+        };
+
+        bookmarkTree.forEach(root => {
+            if (root.children) {
+                root.children.forEach(child => {
+                    if (child.children) {
+                        checkFolder(child);
+                    }
+                });
+            }
+        });
+
+        return emptyFolders;
+    }
+
+    /**
+     * Create backup of bookmarks
+     * @param {Array} bookmarkTree - Chrome bookmark tree
+     * @returns {Object} Backup object with metadata
+     */
+    static createBackup(bookmarkTree) {
+        return {
+            version: '1.0',
+            timestamp: Date.now(),
+            date: new Date().toISOString(),
+            bookmarks: bookmarkTree,
+            stats: this.getBookmarkStats(bookmarkTree)
+        };
+    }
+
+    /**
+     * Validate bookmark backup format
+     * @param {Object} backup - Backup object to validate
+     * @returns {boolean} True if valid backup format
+     */
+    static validateBackup(backup) {
+        return (
+            backup &&
+            backup.version &&
+            backup.timestamp &&
+            backup.bookmarks &&
+            Array.isArray(backup.bookmarks)
+        );
+    }
+
+    /**
+     * Extract domain from URL
+     * @param {string} url - URL to extract domain from
+     * @returns {string} Domain name or 'unknown' if invalid
+     */
+    static extractDomain(url) {
+        try {
+            const domain = new URL(url).hostname;
+            return domain.replace(/^www\./, '');
+        } catch (error) {
+            return 'unknown';
+        }
+    }
+
+    /**
+     * Format date for display
+     * @param {number} timestamp - Unix timestamp
+     * @returns {string} Formatted date string
+     */
+    static formatDate(timestamp) {
+        if (!timestamp) return 'Unknown';
+        return new Date(timestamp).toLocaleDateString();
+    }
+
+    /**
+     * Debounce function to limit rapid function calls
+     * @param {Function} func - Function to debounce
+     * @param {number} wait - Wait time in milliseconds
+     * @returns {Function} Debounced function
+     */
+    static debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    /**
+     * Show status message to user
+     * @param {string} message - Message to display
+     * @param {string} type - Message type ('success', 'error', 'info')
+     * @param {number} duration - Duration to show message (ms)
+     */
+    static showStatus(message, type = 'info', duration = 3000) {
+        const statusElement = document.getElementById('statusMessage');
+        if (!statusElement) return;
+
+        statusElement.textContent = message;
+        statusElement.className = `status-message ${type}`;
+        statusElement.classList.remove('hidden');
+
+        setTimeout(() => {
+            statusElement.classList.add('hidden');
+        }, duration);
+    }
+
+    /**
+     * Show sort completion with a 1-second beep
+     * @param {string} message - Success message to display
+     * @param {number} count - Number of items sorted
+     * @param {string} operation - Type of operation completed
+     */
+    static showSortComplete(message, count = 0, operation = 'sort') {
+        const statusElement = document.getElementById('statusMessage');
+        if (!statusElement) return;
+
+        // Clear any existing classes and add sort-complete styling
+        statusElement.className = 'status-message success sort-complete';
+        statusElement.textContent = message;
+        statusElement.classList.remove('hidden');
+
+        // Play 1-second beep sound
+        this.playCompletionBeep();
+
+        // Auto-hide after longer duration for success messages
+        setTimeout(() => {
+            statusElement.classList.add('hidden');
+        }, 5000);
+
+        // Add temporary pulse animation to any sort buttons
+        this.pulseButtons();
+    }
+
+    /**
+     * Play 1-second completion beep (using Web Audio API)
+     */
+    static playCompletionBeep() {
+        try {
+            // Create a 1-second beep sound
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // Create a clear beep sound at 800Hz
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.type = 'sine';
+
+            // Set volume and fade out at the end
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime + 0.8);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1.0);
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 1.0);
+        } catch (error) {
+            // Silently fail if Web Audio API is not supported
+        }
+    }
+
+    /**
+     * Add pulse animation to buttons temporarily
+     */
+    static pulseButtons() {
+        const buttons = document.querySelectorAll('.btn-primary, .btn-secondary');
+        buttons.forEach(button => {
+            button.style.animation = 'pulse 0.6s ease';
+            setTimeout(() => {
+                button.style.animation = '';
+            }, 600);
+        });
+    }
+
+    /**
+     * Update progress bar
+     * @param {number} progress - Progress percentage (0-100)
+     * @param {string} text - Progress text
+     */
+    static updateProgress(progress, text = 'Processing...') {
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+
+        if (progressContainer && progressBar && progressText) {
+            if (progress === 0) {
+                progressContainer.classList.add('hidden');
+            } else {
+                progressContainer.classList.remove('hidden');
+                progressBar.style.width = `${Math.min(progress, 100)}%`;
+                progressText.textContent = text;
+                
+                if (progress >= 100) {
+                    setTimeout(() => {
+                        progressContainer.classList.add('hidden');
+                    }, 1000);
+                }
+            }
+        }
+    }
+}
+
+// Export for use in other files
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = BookmarkUtils;
+} else {
+    window.BookmarkUtils = BookmarkUtils;
+}
