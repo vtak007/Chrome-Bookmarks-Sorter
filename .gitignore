@@ -1,0 +1,23 @@
+# Rev 1 — Chrome Extension / Web build outputs, OS/editor clutter
+# Build artifacts
+dist/
+build/
+*.zip
+*.crx
+
+# Dependencies (if you bundle tools locally — normally commit your lockfile)
+node_modules/
+
+# Local environment
+.env
+.env.*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# Tests / coverage
+coverage/
