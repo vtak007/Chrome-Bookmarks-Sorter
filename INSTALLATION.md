@@ -1,6 +1,7 @@
 # Chrome Bookmarks Sorter - Installation & Usage Guide
 
 ## 🚀 Installation Instructions
+## Testing
 
 ### Method 1: Load Unpacked Extension (Recommended for Development)
 
