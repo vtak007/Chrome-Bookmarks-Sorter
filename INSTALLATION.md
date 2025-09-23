@@ -9,7 +9,7 @@
    - Open Google Chrome
    - Navigate to `chrome://extensions/`
    - Or go to Menu → More Tools → Extensions
-   - Testing Commits per YT Video
+   
 
 2. **Enable Developer Mode**
    - Toggle the "Developer mode" switch in the top-right corner
