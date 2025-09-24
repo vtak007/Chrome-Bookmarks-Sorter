@@ -455,23 +455,26 @@ class BookmarkUtils {
 
         // Try multiple approaches to minimize false positives
         const approaches = [
-            // Approach 1: HEAD with no-cors (fastest)
-            {
-                method: 'HEAD',
-                mode: 'no-cors',
-                name: 'HEAD no-cors'
-            },
-            // Approach 2: GET with no-cors (more compatible)
+            // Approach 1: GET with no-cors (most compatible, many sites don't support HEAD properly)
             {
                 method: 'GET',
                 mode: 'no-cors',
-                name: 'GET no-cors'
+                name: 'GET no-cors',
+                timeout: 10000  // 10 seconds for first attempt
             },
-            // Approach 3: HEAD with cors (for same-origin or CORS-enabled sites)
+            // Approach 2: HEAD with no-cors (faster but less reliable)
             {
                 method: 'HEAD',
+                mode: 'no-cors',
+                name: 'HEAD no-cors',
+                timeout: 8000   // 8 seconds
+            },
+            // Approach 3: GET with cors (for same-origin or CORS-enabled sites)
+            {
+                method: 'GET',
                 mode: 'cors',
-                name: 'HEAD cors'
+                name: 'GET cors',
+                timeout: 10000  // 10 seconds
             }
         ];
 
@@ -481,7 +484,8 @@ class BookmarkUtils {
         for (const approach of approaches) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), timeout);
+                const approachTimeout = approach.timeout || timeout;
+                const timeoutId = setTimeout(() => controller.abort(), approachTimeout);
 
                 const response = await fetch(url, {
                     method: approach.method,
@@ -541,7 +545,7 @@ class BookmarkUtils {
                         url,
                         isDead: true,
                         isSkipped: false,
-                        error: 'Timeout (5s)',
+                        error: 'Timeout (10s)',
                         status: null
                     };
                 }
@@ -576,7 +580,9 @@ class BookmarkUtils {
                 'youtube.com',
                 'amazon.com', 'aws.amazon.com',
                 'apple.com',
-                'mozilla.org'
+                'mozilla.org',
+                'wolframalpha.com',
+                'winstall.app'
             ];
 
             const isKnownDomain = knownWorkingDomains.some(domain =>
@@ -755,7 +761,7 @@ class BookmarkUtils {
             <div style="font-size: 0.9em; color: #64748b;">
                 <div style="margin: 4px 0;"><span class="error-badge-dead">HTTP 404/410</span> - Definitely dead links (removed pages)</div>
                 <div style="margin: 4px 0;"><span class="error-badge-server">HTTP 500+</span> - Server errors (may be temporary)</div>
-                <div style="margin: 4px 0;"><span class="error-badge-timeout">Timeout</span> - Site too slow to respond (5s limit)</div>
+                <div style="margin: 4px 0;"><span class="error-badge-timeout">Timeout</span> - Site too slow to respond (10s limit)</div>
                 <div style="margin: 4px 0;"><span class="error-badge">Network Error</span> - Connection issues or unknown problems</div>
             </div>
         </div>`;
