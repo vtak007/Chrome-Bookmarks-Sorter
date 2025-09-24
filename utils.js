@@ -453,69 +453,155 @@ class BookmarkUtils {
             };
         }
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-            const response = await fetch(url, {
-                method: 'HEAD', // Use HEAD to avoid downloading content
-                signal: controller.signal,
-                mode: 'no-cors' // Allow cross-origin requests
-            });
-
-            clearTimeout(timeoutId);
-
-            // In no-cors mode, response.status is always 0 for cross-origin requests
-            // We'll consider the request successful if it doesn't throw
-            return {
-                url,
-                isDead: false,
-                isSkipped: false,
-                error: null,
-                status: response.status || 'OK (no-cors)'
-            };
-
-        } catch (error) {
-            let isDead = true;
-            let errorMessage = error.message;
-
-            // Handle different types of errors
-            if (error.name === 'AbortError') {
-                errorMessage = 'Timeout (5s)';
-            } else if (error.message.includes('Failed to fetch')) {
-                // This could be CORS, network error, or dead link
-                // In no-cors mode, we'll try a different approach
-                try {
-                    // Try with GET request as fallback
-                    const controller2 = new AbortController();
-                    const timeoutId2 = setTimeout(() => controller2.abort(), timeout);
-
-                    await fetch(url, {
-                        method: 'GET',
-                        signal: controller2.signal,
-                        mode: 'no-cors'
-                    });
-
-                    clearTimeout(timeoutId2);
-                    isDead = false;
-                    errorMessage = 'OK (fallback)';
-                } catch (fallbackError) {
-                    if (fallbackError.name === 'AbortError') {
-                        errorMessage = 'Timeout (5s)';
-                    } else {
-                        errorMessage = 'Network error or dead link';
-                    }
-                }
+        // Try multiple approaches to minimize false positives
+        const approaches = [
+            // Approach 1: HEAD with no-cors (fastest)
+            {
+                method: 'HEAD',
+                mode: 'no-cors',
+                name: 'HEAD no-cors'
+            },
+            // Approach 2: GET with no-cors (more compatible)
+            {
+                method: 'GET',
+                mode: 'no-cors',
+                name: 'GET no-cors'
+            },
+            // Approach 3: HEAD with cors (for same-origin or CORS-enabled sites)
+            {
+                method: 'HEAD',
+                mode: 'cors',
+                name: 'HEAD cors'
             }
+        ];
 
-            return {
-                url,
-                isDead,
-                isSkipped: false,
-                error: errorMessage,
-                status: null
-            };
+        let lastError = null;
+        let bestResult = null;
+
+        for (const approach of approaches) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+                const response = await fetch(url, {
+                    method: approach.method,
+                    mode: approach.mode,
+                    signal: controller.signal,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    }
+                });
+
+                clearTimeout(timeoutId);
+
+                // Success! Check if we got a meaningful status code
+                if (approach.mode === 'cors' && response.status) {
+                    // We have a real status code
+                    if (response.status >= 200 && response.status < 400) {
+                        // Definitely working
+                        return {
+                            url,
+                            isDead: false,
+                            isSkipped: false,
+                            error: null,
+                            status: response.status
+                        };
+                    } else if (response.status >= 400) {
+                        // Real HTTP error
+                        const isDeadStatus = response.status === 404 ||
+                                           response.status === 410 ||
+                                           response.status >= 500;
+                        return {
+                            url,
+                            isDead: isDeadStatus,
+                            isSkipped: false,
+                            error: isDeadStatus ? `HTTP ${response.status}` : `HTTP ${response.status} (not dead)`,
+                            status: response.status
+                        };
+                    }
+                } else {
+                    // no-cors mode or successful request without status
+                    // If we reach here without throwing, the site is likely working
+                    bestResult = {
+                        url,
+                        isDead: false,
+                        isSkipped: false,
+                        error: null,
+                        status: response.status || `OK (${approach.name})`
+                    };
+                    // Don't return immediately, try other approaches for better info
+                }
+
+            } catch (error) {
+                lastError = error;
+
+                // Only treat timeouts as definitive failures
+                if (error.name === 'AbortError') {
+                    return {
+                        url,
+                        isDead: true,
+                        isSkipped: false,
+                        error: 'Timeout (5s)',
+                        status: null
+                    };
+                }
+
+                // For other errors, continue trying other approaches
+                continue;
+            }
         }
+
+        // If we found a successful result during our attempts, return it
+        if (bestResult) {
+            return bestResult;
+        }
+
+        // All approaches failed - but distinguish between likely CORS vs truly dead
+        if (lastError && (
+            lastError.message.includes('Failed to fetch') ||
+            lastError.message.includes('CORS') ||
+            lastError.message.includes('blocked')
+        )) {
+            // This is likely a CORS issue, not a dead link
+            // For well-known domains, be even more conservative
+            const hostname = new URL(url).hostname.toLowerCase();
+            const knownWorkingDomains = [
+                'google.com', 'googleapis.com', 'googleusercontent.com',
+                'microsoft.com', 'live.com', 'outlook.com',
+                'facebook.com', 'instagram.com',
+                'twitter.com', 'x.com',
+                'linkedin.com',
+                'github.com',
+                'stackoverflow.com',
+                'youtube.com',
+                'amazon.com', 'aws.amazon.com',
+                'apple.com',
+                'mozilla.org'
+            ];
+
+            const isKnownDomain = knownWorkingDomains.some(domain =>
+                hostname === domain || hostname.endsWith('.' + domain)
+            );
+
+            if (isKnownDomain) {
+                return {
+                    url,
+                    isDead: false,
+                    isSkipped: true,
+                    error: 'CORS blocked (likely working)',
+                    status: null
+                };
+            }
+        }
+
+        // Unknown error on unknown domain - mark as potentially dead
+        return {
+            url,
+            isDead: true,
+            isSkipped: false,
+            error: lastError ? `Network error: ${lastError.message}` : 'Unknown error',
+            status: null
+        };
     }
 
     /**
@@ -629,6 +715,9 @@ class BookmarkUtils {
         .link-url { color: #3b82f6; text-decoration: none; font-family: monospace; }
         .link-url:hover { text-decoration: underline; }
         .error-badge { background: #fee2e2; color: #991b1b; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 8px; }
+        .error-badge-dead { background: #fca5a5; color: #7f1d1d; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 8px; font-weight: 600; }
+        .error-badge-timeout { background: #fed7aa; color: #9a3412; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 8px; }
+        .error-badge-server { background: #ddd6fe; color: #5b21b6; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 8px; }
         .timestamp { color: #64748b; font-size: 0.9em; margin-bottom: 20px; }
         .no-dead-links { text-align: center; color: #059669; font-size: 1.2em; padding: 40px; }
         .footer { text-align: center; color: #94a3b8; font-size: 0.9em; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
@@ -659,6 +748,16 @@ class BookmarkUtils {
                 <div class="stat-number">${stats.totalChecked || 0}</div>
                 <div class="stat-label">Total Links Checked</div>
             </div>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <h3 style="color: #475569; margin-bottom: 12px;">📋 Error Types Explained</h3>
+            <div style="font-size: 0.9em; color: #64748b;">
+                <div style="margin: 4px 0;"><span class="error-badge-dead">HTTP 404/410</span> - Definitely dead links (removed pages)</div>
+                <div style="margin: 4px 0;"><span class="error-badge-server">HTTP 500+</span> - Server errors (may be temporary)</div>
+                <div style="margin: 4px 0;"><span class="error-badge-timeout">Timeout</span> - Site too slow to respond (5s limit)</div>
+                <div style="margin: 4px 0;"><span class="error-badge">Network Error</span> - Connection issues or unknown problems</div>
+            </div>
         </div>`;
 
             // Add dead links grouped by folder
@@ -669,11 +768,23 @@ class BookmarkUtils {
 
                 links.forEach(result => {
                     const bookmark = result.bookmark;
+                    const error = result.error || 'Dead Link';
+
+                    // Determine badge color based on error type
+                    let badgeClass = 'error-badge';
+                    if (error.includes('404') || error.includes('410')) {
+                        badgeClass = 'error-badge-dead';  // Red for definitely dead
+                    } else if (error.includes('Timeout')) {
+                        badgeClass = 'error-badge-timeout'; // Orange for timeout
+                    } else if (error.includes('500') || error.includes('502') || error.includes('503')) {
+                        badgeClass = 'error-badge-server'; // Purple for server errors
+                    }
+
                     html += `
             <div class="link-item">
                 <div class="link-title">${bookmark.title || 'Untitled Bookmark'}</div>
                 <a href="${result.url}" target="_blank" class="link-url">${result.url}</a>
-                <span class="error-badge">${result.error || 'Dead Link'}</span>
+                <span class="${badgeClass}">${error}</span>
             </div>`;
                 });
 
