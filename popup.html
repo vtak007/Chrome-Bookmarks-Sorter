@@ -47,6 +47,26 @@
                 </div>
             </section>
 
+            <!-- Link Health -->
+            <section class="link-health-section">
+                <h3>Link Health</h3>
+                <div class="link-health-controls">
+                    <select id="linkHealthScope" class="folder-select">
+                        <option value="">Select scope for link checking...</option>
+                    </select>
+                    <div class="link-health-buttons">
+                        <button id="checkDeadLinksBtn" class="btn-secondary">Check Dead Links</button>
+                        <button id="cancelLinkCheckBtn" class="btn-cancel hidden">Cancel Check</button>
+                    </div>
+                </div>
+                <div id="linkCheckProgress" class="link-check-progress hidden">
+                    <div class="link-progress-bar">
+                        <div id="linkProgressBar" class="progress-fill"></div>
+                    </div>
+                    <span id="linkProgressText">Checking links...</span>
+                </div>
+            </section>
+
             <!-- Backup/Restore -->
             <section class="backup-section">
                 <h3>Backup & Restore</h3>

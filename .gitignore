@@ -19,5 +19,8 @@ Thumbs.db
 .vscode/
 *.log
 
+# Backup files
+*.bak
+
 # Tests / coverage
 coverage/

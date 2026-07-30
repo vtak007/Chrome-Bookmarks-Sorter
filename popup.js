@@ -42,27 +42,60 @@ class BookmarkSorter {
     populateFolderSelect() {
         const folderSelect = document.getElementById('folderSelect');
         folderSelect.innerHTML = '<option value="">Select a folder...</option>';
-        
+
         // Add "All Bookmarks" option
         const allOption = document.createElement('option');
         allOption.value = 'all';
         allOption.textContent = '📚 All Bookmarks (Sort Every Folder)';
         folderSelect.appendChild(allOption);
-        
+
         // Add separator
         const separator = document.createElement('option');
         separator.disabled = true;
         separator.textContent = '─────────────────────';
         folderSelect.appendChild(separator);
-        
+
         this.folders = [];
         this.collectFolders(this.bookmarkTree);
-        
+
         this.folders.forEach(folder => {
             const option = document.createElement('option');
             option.value = folder.id;
             option.textContent = folder.path;
             folderSelect.appendChild(option);
+        });
+
+        // Also populate link health scope selector
+        this.populateLinkHealthScope();
+    }
+
+    /**
+     * Populate link health scope dropdown
+     */
+    populateLinkHealthScope() {
+        const linkHealthScope = document.getElementById('linkHealthScope');
+        if (!linkHealthScope) return;
+
+        linkHealthScope.innerHTML = '<option value="">Select scope for link checking...</option>';
+
+        // Add "All Bookmarks" option
+        const allOption = document.createElement('option');
+        allOption.value = 'all';
+        allOption.textContent = '🔗 All Bookmarks (Check Every Link)';
+        linkHealthScope.appendChild(allOption);
+
+        // Add separator
+        const separator = document.createElement('option');
+        separator.disabled = true;
+        separator.textContent = '─────────────────────';
+        linkHealthScope.appendChild(separator);
+
+        // Add folders
+        this.folders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.id;
+            option.textContent = folder.path;
+            linkHealthScope.appendChild(option);
         });
     }
 
@@ -583,6 +616,199 @@ class BookmarkSorter {
     }
 
     /**
+     * Check dead links in selected scope
+     */
+    async checkDeadLinks() {
+        const scope = document.getElementById('linkHealthScope').value;
+
+        if (!scope) {
+            BookmarkUtils.showStatus('Please select a scope for link checking', 'error');
+            return;
+        }
+
+        // Initialize cancel token
+        this.cancelToken = { cancelled: false };
+
+        try {
+            // Show cancel button and hide check button
+            document.getElementById('checkDeadLinksBtn').classList.add('hidden');
+            document.getElementById('cancelLinkCheckBtn').classList.remove('hidden');
+
+            BookmarkUtils.showStatus('Preparing to check links...', 'info');
+            BookmarkUtils.updateLinkProgress(0, 'Preparing...');
+
+            // Get bookmarks based on scope
+            const bookmarks = await this.getBookmarksForLinkCheck(scope);
+
+            if (bookmarks.length === 0) {
+                BookmarkUtils.showStatus('No bookmarks found in selected scope', 'info');
+                this.resetLinkCheckUI();
+                return;
+            }
+
+            BookmarkUtils.showStatus(`Checking ${bookmarks.length} links...`, 'info');
+
+            // Check dead links with progress callback
+            const deadLinks = await BookmarkUtils.checkDeadLinks(
+                bookmarks,
+                (progress, text) => BookmarkUtils.updateLinkProgress(progress, text),
+                this.cancelToken
+            );
+
+            if (this.cancelToken.cancelled) {
+                BookmarkUtils.showStatus('Link check cancelled', 'info');
+                this.resetLinkCheckUI();
+                return;
+            }
+
+            // Generate and download report
+            const stats = {
+                totalChecked: bookmarks.length,
+                scope: scope === 'all' ? 'All Bookmarks' : this.getFolderNameById(scope)
+            };
+
+            const htmlReport = BookmarkUtils.generateDeadLinksReport(deadLinks, stats);
+            BookmarkUtils.downloadDeadLinksReport(htmlReport);
+
+            // Show completion message
+            if (deadLinks.length === 0) {
+                BookmarkUtils.showSortComplete(
+                    `✅ Great news! No dead links found in ${bookmarks.length} checked bookmarks`,
+                    bookmarks.length,
+                    'Link check'
+                );
+            } else {
+                BookmarkUtils.showSortComplete(
+                    `🔗 Link check complete! ${deadLinks.length} dead links found and saved to report`,
+                    deadLinks.length,
+                    'Link check'
+                );
+            }
+
+        } catch (error) {
+            console.error('Error checking dead links:', error);
+            BookmarkUtils.showStatus('Error during link checking', 'error');
+        } finally {
+            this.resetLinkCheckUI();
+        }
+    }
+
+    /**
+     * Cancel dead link checking
+     */
+    cancelLinkCheck() {
+        if (this.cancelToken) {
+            this.cancelToken.cancelled = true;
+        }
+        BookmarkUtils.showStatus('Cancelling link check...', 'info');
+        this.resetLinkCheckUI();
+    }
+
+    /**
+     * Reset link check UI to initial state
+     */
+    resetLinkCheckUI() {
+        document.getElementById('checkDeadLinksBtn').classList.remove('hidden');
+        document.getElementById('cancelLinkCheckBtn').classList.add('hidden');
+        BookmarkUtils.updateLinkProgress(0);
+    }
+
+    /**
+     * Get bookmarks for link checking based on scope
+     */
+    async getBookmarksForLinkCheck(scope) {
+        let bookmarks = [];
+
+        if (scope === 'all') {
+            // Get all bookmarks with folder path information
+            bookmarks = this.getAllBookmarksWithPath();
+        } else {
+            // Get bookmarks from specific folder
+            bookmarks = await this.getBookmarksFromFolderWithPath(scope);
+        }
+
+        return bookmarks.filter(bookmark => bookmark.url);
+    }
+
+    /**
+     * Get all bookmarks with folder path information
+     */
+    getAllBookmarksWithPath() {
+        const bookmarks = [];
+
+        const collectBookmarks = (node, path = '') => {
+            if (node.children) {
+                const currentPath = path ? `${path} > ${node.title}` : node.title;
+
+                node.children.forEach(child => {
+                    if (child.url) {
+                        bookmarks.push({
+                            ...child,
+                            folderPath: currentPath || 'Root'
+                        });
+                    } else if (child.children) {
+                        collectBookmarks(child, currentPath);
+                    }
+                });
+            }
+        };
+
+        this.bookmarkTree.forEach(root => {
+            if (root.children) {
+                collectBookmarks(root, root.title);
+            }
+        });
+
+        return bookmarks;
+    }
+
+    /**
+     * Get bookmarks from specific folder with path information
+     */
+    async getBookmarksFromFolderWithPath(folderId) {
+        const bookmarks = [];
+
+        const findFolder = (nodes, path = '') => {
+            for (const node of nodes) {
+                if (node.id === folderId) {
+                    const folderPath = path ? `${path} > ${node.title}` : node.title;
+
+                    if (node.children) {
+                        node.children.forEach(child => {
+                            if (child.url) {
+                                bookmarks.push({
+                                    ...child,
+                                    folderPath: folderPath
+                                });
+                            }
+                        });
+                    }
+                    return;
+                }
+
+                if (node.children) {
+                    const currentPath = path ? `${path} > ${node.title}` : node.title;
+                    findFolder(node.children, currentPath);
+                }
+            }
+        };
+
+        this.bookmarkTree.forEach(root => {
+            findFolder(root.children || [], root.title);
+        });
+
+        return bookmarks;
+    }
+
+    /**
+     * Get folder name by ID
+     */
+    getFolderNameById(folderId) {
+        const folder = this.folders.find(f => f.id === folderId);
+        return folder ? folder.path : 'Unknown Folder';
+    }
+
+    /**
      * Bind event listeners
      */
     bindEvents() {
@@ -622,6 +848,16 @@ class BookmarkSorter {
             if (file) {
                 this.restoreBackup(file);
             }
+        });
+
+        // Dead link checker button
+        document.getElementById('checkDeadLinksBtn').addEventListener('click', () => {
+            this.checkDeadLinks();
+        });
+
+        // Cancel link check button
+        document.getElementById('cancelLinkCheckBtn').addEventListener('click', () => {
+            this.cancelLinkCheck();
         });
     }
 }
