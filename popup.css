@@ -330,14 +330,119 @@ select:focus {
     100% { transform: rotate(360deg); }
 }
 
+/* Link Health Section */
+.link-health-section {
+    background: #fefefe;
+    border: 2px solid #e0f2fe;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.link-health-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.link-health-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.link-health-buttons button {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.btn-cancel {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 2px solid #fca5a5;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-cancel:hover {
+    background: #fecaca;
+    border-color: #f87171;
+    transform: translateY(-1px);
+}
+
+/* Link Check Progress */
+.link-check-progress {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.link-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.link-progress-bar .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #06b6d4 0%, #0891b2 100%);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+#linkProgressText {
+    font-size: 13px;
+    color: #475569;
+    text-align: center;
+    display: block;
+    font-weight: 500;
+}
+
+/* Link Health Scope Select */
+#linkHealthScope {
+    background: white;
+    border: 2px solid #e0f2fe;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #334155;
+    transition: all 0.2s ease;
+}
+
+#linkHealthScope:hover {
+    border-color: #0891b2;
+}
+
+#linkHealthScope:focus {
+    outline: none;
+    border-color: #06b6d4;
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+}
+
 /* Responsive adjustments */
 @media (max-width: 400px) {
     body {
         width: 100vw;
     }
-    
+
     .container {
         margin: 0;
         border-radius: 0;
+    }
+
+    .link-health-buttons {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .link-health-buttons button {
+        margin-bottom: 4px;
     }
 }
