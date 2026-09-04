@@ -197,6 +197,9 @@ For large bookmark collections:
 - Close other Chrome tabs during operations
 - Create backups before major operations
 
+**Popup Renders Compressed/Flashing**
+- Fixed in v1.0: `popup.css` previously had a `@media (max-width: 400px)` rule intended for responsive web pages. Popups are fixed-size windows sized by Chrome, not the user, so this rule served no purpose and could misfire on multi-monitor/mixed-DPI setups, shrinking the popup to `100vw` and triggering a resize feedback loop. The rule has been removed.
+
 ### Error Recovery
 - All operations include automatic error handling
 - Interrupted operations won't corrupt bookmark data
