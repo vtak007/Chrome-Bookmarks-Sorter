@@ -22,7 +22,7 @@ background service worker; no build step and no third-party dependencies.
 | `background.js` | `BackgroundService` service worker — handles install/update/startup lifecycle and messages from the popup. |
 | `icons/` | Extension toolbar icons. |
 | `README.md` | Feature overview and usage. |
-| `Installation.md` | Install instructions (unpacked / packaged). |
+| `INSTALLATION.md` | Install instructions (unpacked / packaged). |
 | `TEST_GUIDE.md` | Manual test guide. |
 
 ## Notes
